@@ -42,8 +42,8 @@
     },
     {
       "type": "timeseries",
-      "title": "PHP-FPM children: active vs total (FE)",
-      "description": "When active reaches total, new requests queue and 504 without reaching the backend.",
+      "title": "PHP-FPM children: active vs total (FE, fpm runtime only)",
+      "description": "Empty when FE runs FrankenPHP. When active reaches total, new requests queue and 504 without reaching the backend.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 },
       "targets": [

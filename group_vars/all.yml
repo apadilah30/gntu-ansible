@@ -35,9 +35,12 @@ node_version: "20"
 frontend_runtime: "fpm"
 
 # FrankenPHP worker-mode tuning (used only when frontend_runtime == "frankenphp")
-frankenphp_listen: "127.0.0.1:8084"     # put nginx in front as reverse proxy
-frankenphp_workers: 8                    # ~= CPU cores
-frankenphp_max_requests: 500             # recycle workers to avoid leaks
+frankenphp_listen: "127.0.0.1:8084"        # nginx reverse-proxies to this
+frankenphp_workers: 8                       # ~= CPU cores
+frankenphp_max_requests: 500                # recycle workers to avoid leaks
+frankenphp_proxy_read_timeout: "60s"        # nginx -> FrankenPHP; fail fast, don't hang
+frankenphp_disable_fpm: false               # set true to stop/disable php-fpm after cutover
+frontend_server_name: "ghrahaniagatatautama.lmd.co.id"  # server_name for the FE vhost
 
 # ---- Frontend (Laravel served by nginx + PHP-FPM, NOT Octane) ----
 # nginx serves {{ frontend_dir }}/public and passes .php to the FPM unix socket.

@@ -28,17 +28,36 @@
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
 
-- name: Enable and restart FrankenPHP (zero-config reload uses octane:reload)
+- name: Enable and (re)start FrankenPHP
   ansible.builtin.systemd:
     name: gntu-cms-octane.service
     enabled: true
     state: restarted
 
-- name: Reminder - point nginx at the FrankenPHP upstream
-  ansible.builtin.debug:
-    msg:
-      - "FrankenPHP listening on {{ frankenphp_listen }}."
-      - "Update nginx: replace the 'location ~ \\.php$ { fastcgi_pass ... }' block with a reverse proxy:"
-      - "  location / { proxy_pass http://{{ frankenphp_listen }}; proxy_read_timeout 60s; ... }"
-      - "Keep 'root {{ frontend_dir }}/public' for static assets (/build, images)."
-      - "To deploy new code without downtime: php artisan octane:reload"
+# Switch nginx from PHP-FPM (fastcgi_pass) to a reverse proxy in front of FrankenPHP.
+- name: Deploy nginx reverse-proxy vhost for FrankenPHP
+  ansible.builtin.template:
+    src: nginx-frankenphp.conf.j2
+    dest: /etc/nginx/sites-available/gntu-cms.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload nginx
+
+- name: Enable the FrankenPHP vhost
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/gntu-cms.conf
+    dest: /etc/nginx/sites-enabled/gntu-cms.conf
+    state: link
+  notify: reload nginx
+
+- name: Validate nginx config
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Optionally disable PHP-FPM (no longer used by FE)
+  ansible.builtin.systemd:
+    name: "php{{ php_version }}-fpm"
+    state: stopped
+    enabled: false
+  when: frankenphp_disable_fpm | default(false) | bool

@@ -7,3 +7,8 @@
   ansible.builtin.systemd:
     name: "php{{ php_version }}-fpm"
     state: restarted
+
+- name: reload nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
