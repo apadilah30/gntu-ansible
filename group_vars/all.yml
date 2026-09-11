@@ -35,7 +35,10 @@ node_version: "20"
 frontend_runtime: "fpm"
 
 # FrankenPHP worker-mode tuning (used only when frontend_runtime == "frankenphp")
-frankenphp_listen: "127.0.0.1:8084"        # nginx reverse-proxies to this
+frankenphp_listen: "127.0.0.1:8085"        # nginx reverse-proxies to this
+# FrankenPHP/Caddy needs a writable config+data dir; www-data has no writable
+# $HOME, so point XDG dirs into storage/ (mirrors the docker-compose XDG_* setup).
+frankenphp_data_dir: "{{ frontend_dir }}/storage/franken"
 frankenphp_workers: 8                       # ~= CPU cores
 frankenphp_max_requests: 500                # recycle workers to avoid leaks
 frankenphp_proxy_read_timeout: "60s"        # nginx -> FrankenPHP; fail fast, don't hang

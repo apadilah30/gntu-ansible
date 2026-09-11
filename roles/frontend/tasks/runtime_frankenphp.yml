@@ -16,6 +16,17 @@
     creates: "{{ frontend_dir }}/frankenphp"
   become_user: "{{ deploy_user }}"
 
+- name: Ensure writable FrankenPHP config+data dirs (avoids Caddy autosave warnings)
+  ansible.builtin.file:
+    path: "{{ frankenphp_data_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0775"
+  loop:
+    - config
+    - data
+
 - name: Deploy Octane/FrankenPHP systemd unit
   ansible.builtin.template:
     src: frankenphp.service.j2

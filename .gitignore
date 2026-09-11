@@ -2,3 +2,5 @@
 group_vars/vault.yml
 .vault_pass
 *.log
+config.bat
+node_modules
