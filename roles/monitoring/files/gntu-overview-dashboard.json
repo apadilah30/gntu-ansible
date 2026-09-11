@@ -1,0 +1,118 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "GNTU - Server & Services Overview",
+  "uid": "gntu-overview",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Uptime & 504 (the reported symptom)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Endpoint Up (blackbox)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }] } },
+      "targets": [{ "expr": "probe_success", "legendFormat": "{{instance}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "nginx 504 responses (rate 5m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 1 },
+      "targets": [{ "expr": "increase(nginx_http_requests_total{status=\"504\"}[5m])", "legendFormat": "504" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Probe HTTP duration (s)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 1 },
+      "targets": [{ "expr": "probe_http_duration_seconds{phase=\"processing\"}", "legendFormat": "{{instance}}" }]
+    },
+    {
+      "type": "row",
+      "title": "Worker saturation (root-cause: hang while CPU idle)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Gunicorn busy workers per service",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
+      "targets": [{ "expr": "gunicorn_workers", "legendFormat": "{{job}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Gunicorn request rate",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 8 },
+      "targets": [{ "expr": "rate(gunicorn_requests_total[5m])", "legendFormat": "{{job}}" }]
+    },
+    {
+      "type": "row",
+      "title": "Host resources",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU usage %",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 16 },
+      "targets": [{ "expr": "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "cpu" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory available %",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 16 },
+      "targets": [{ "expr": "(node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "mem avail" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk free %",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 16 },
+      "targets": [{ "expr": "(node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes) * 100", "legendFormat": "{{mountpoint}}" }]
+    },
+    {
+      "type": "row",
+      "title": "Dependencies (Redis / PostgreSQL)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis connected clients / blocked",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        { "expr": "redis_connected_clients", "legendFormat": "connected" },
+        { "expr": "redis_blocked_clients", "legendFormat": "blocked" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "PostgreSQL locks (session-lock contention)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 24 },
+      "targets": [{ "expr": "pg_locks_count", "legendFormat": "{{mode}}" }]
+    },
+    {
+      "type": "row",
+      "title": "Logs (correlate with a 504 spike)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 }
+    },
+    {
+      "type": "logs",
+      "title": "nginx + service logs (Loki)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 32 },
+      "targets": [{ "expr": "{job=~\"nginx|systemd-journal\"}" }]
+    }
+  ]
+}

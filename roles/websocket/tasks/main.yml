@@ -1,0 +1,30 @@
+---
+# The websocket code ships inside the backend repo (microservice-websocket/),
+# so it is expected to already be checked out by the backend role.
+- name: Install npm deps for websocket apps
+  ansible.builtin.command:
+    cmd: npm install --omit=dev
+    chdir: "{{ websocket_dir }}"
+  become_user: "{{ deploy_user }}"
+  args:
+    creates: "{{ websocket_dir }}/node_modules"
+
+- name: Deploy websocket systemd units
+  ansible.builtin.template:
+    src: websocket.service.j2
+    dest: "/etc/systemd/system/gntu-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ websocket_services }}"
+  notify: reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and restart websocket services
+  ansible.builtin.systemd:
+    name: "gntu-{{ item.name }}.service"
+    enabled: true
+    state: restarted
+  loop: "{{ websocket_services }}"

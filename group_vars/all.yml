@@ -1,0 +1,91 @@
+---
+# =====================================================================
+# CENTRAL CONFIGURATION - GNTU deployment + observability
+# Adjust these to match your server. Secrets should go in group_vars/vault.yml
+# (encrypted with ansible-vault) and referenced here.
+# =====================================================================
+
+# ---- Base ----
+timezone: "Asia/Jakarta"
+deploy_user: "www-data"
+deploy_group: "www-data"
+
+# ---- Paths (match your current server layout) ----
+frontend_dir: "/var/www/gntu-cms"
+backend_dir: "/sites/crm-be/crm-be-microservices"
+websocket_dir: "{{ backend_dir }}/microservice-websocket"
+backend_venv: "{{ backend_dir }}/venv"
+
+# ---- Git sources ----
+frontend_repo: "https://github.com/apadilah30/gntu-cms.git"
+frontend_branch: "main"
+backend_repo: "https://github.com/apadilah30/gntu-be-microservices.git"
+backend_branch: "main"
+
+# ---- Runtime versions ----
+php_version: "8.3"
+python_bin: "/usr/bin/python3"        # BE historically pinned to 3.7; set to venv python
+node_version: "20"
+
+# ---- Frontend (Laravel Octane / FrankenPHP) ----
+frontend_octane_server: "frankenphp"
+frontend_port: 8084
+# Worker tuning: start ~= CPU cores. Too few = request queuing -> nginx 504.
+frontend_octane_workers: 8
+frontend_octane_max_requests: 500     # recycle workers to avoid leaks
+
+# ---- Backend (Gunicorn + UvicornWorker) ----
+# Per service: bind port, workers, and a HARD request timeout.
+# A missing/huge timeout is the classic cause of the intermittent 504 hang.
+gunicorn_worker_timeout: 30           # seconds; kill a stuck worker instead of hanging forever
+gunicorn_graceful_timeout: 30
+backend_services:
+  - { name: "api-gateway",            module: "gntu_api_gateway.asgi:application", workdir: "microservice/gntu-api-gateway",   port: 8000, workers: 4 }
+  - { name: "user-management",        module: "api.asgi:application",              workdir: "microservice/user-management",     port: 8081, workers: 3 }
+  - { name: "crm-setting",            module: "gntu-crm-setting.asgi:application", workdir: "microservice/gntu-crm-setting",     port: 8090, workers: 3 }
+  - { name: "crm-transaction",        module: "gntu-crm-transaction.asgi:application", workdir: "microservice/gntu-crm-transaction", port: 8091, workers: 3 }
+
+# ---- Websocket (Node/Socket.IO) ----
+websocket_services:
+  - { name: "gntu-socket",              script: "gntu-socket/src/server.js",  port: 3000, path: "/socket/notification/socket.io" }
+  - { name: "gntu-omnichannel-socket",  script: "omnichannel_websocket/index.js", port: 5001, path: "/socket/omnichannel/socket.io" }
+
+# ---- Public endpoints for blackbox uptime probing ----
+# These directly answer "is the app up and behaving normally?"
+blackbox_targets:
+  - "https://ghrahaniagatatautama.lmd.co.id/"                    # FE home
+  - "https://ghrahaniagatatautama.lmd.co.id/api-gateway/"        # BE via FE proxy
+  - "http://127.0.0.1:8084/up"                                   # Laravel /up healthcheck (local)
+  - "http://127.0.0.1:8000/"                                     # gateway direct (local)
+
+# ---- Monitoring component versions ----
+prometheus_version: "2.54.1"
+alertmanager_version: "0.27.0"
+node_exporter_version: "1.8.2"
+nginx_exporter_version: "1.3.0"
+redis_exporter_version: "1.62.0"
+postgres_exporter_version: "0.15.0"
+blackbox_exporter_version: "0.25.0"
+loki_version: "3.1.1"
+promtail_version: "3.1.1"
+grafana_apt: true                      # install Grafana from official apt repo
+
+prometheus_retention: "30d"
+prometheus_scrape_interval: "15s"
+
+# ---- PostgreSQL (for postgres_exporter). Read-only monitoring user. ----
+pg_exporter_dsn: "postgresql://gntu_monitor:CHANGE_ME@127.0.0.1:5432/postgres?sslmode=disable"
+
+# ---- Redis (for redis_exporter) ----
+redis_addr: "redis://127.0.0.1:6379"
+redis_password: ""                     # set if your Redis has auth
+
+# ---- Grafana ----
+grafana_admin_user: "admin"
+grafana_admin_password: "CHANGE_ME_grafana"   # move to vault
+grafana_port: 3001                     # avoid clash with websocket 3000
+
+# ---- Alerting: Telegram ----
+# Create a bot via @BotFather, get the token; get chat_id via @userinfobot or getUpdates.
+alert_telegram_bot_token: "CHANGE_ME_BOT_TOKEN"   # move to vault
+alert_telegram_chat_id: "CHANGE_ME_CHAT_ID"       # numeric chat/group id

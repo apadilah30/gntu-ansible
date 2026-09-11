@@ -1,0 +1,8 @@
+---
+# Deploy/redeploy only the Django microservices + websocket.
+- name: Deploy backend services
+  hosts: backend
+  become: true
+  roles:
+    - backend
+    - websocket

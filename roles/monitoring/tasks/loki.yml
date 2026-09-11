@@ -1,0 +1,94 @@
+---
+- name: Download Loki
+  ansible.builtin.get_url:
+    url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-linux-amd64.zip"
+    dest: /tmp/loki.zip
+    mode: "0644"
+
+- name: Unzip Loki
+  ansible.builtin.unarchive:
+    src: /tmp/loki.zip
+    dest: /opt/monitoring/bin
+    remote_src: true
+    creates: /opt/monitoring/bin/loki-linux-amd64
+
+- name: Install Loki binary
+  ansible.builtin.copy:
+    src: /opt/monitoring/bin/loki-linux-amd64
+    dest: /opt/monitoring/bin/loki
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: Download Promtail
+  ansible.builtin.get_url:
+    url: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-linux-amd64.zip"
+    dest: /tmp/promtail.zip
+    mode: "0644"
+
+- name: Unzip Promtail
+  ansible.builtin.unarchive:
+    src: /tmp/promtail.zip
+    dest: /opt/monitoring/bin
+    remote_src: true
+    creates: /opt/monitoring/bin/promtail-linux-amd64
+
+- name: Install Promtail binary
+  ansible.builtin.copy:
+    src: /opt/monitoring/bin/promtail-linux-amd64
+    dest: /opt/monitoring/bin/promtail
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: Deploy Loki config
+  ansible.builtin.copy:
+    src: loki-config.yml
+    dest: /etc/loki/loki-config.yml
+    owner: monitoring
+    group: monitoring
+    mode: "0644"
+  notify: restart loki
+
+- name: Deploy Promtail config
+  ansible.builtin.copy:
+    src: promtail-config.yml
+    dest: /etc/promtail/promtail-config.yml
+    owner: monitoring
+    group: monitoring
+    mode: "0644"
+  notify: restart promtail
+
+- name: Add promtail user to systemd-journal + adm (read journald + nginx logs)
+  ansible.builtin.user:
+    name: monitoring
+    groups: systemd-journal,adm
+    append: true
+
+- name: Loki service
+  ansible.builtin.template:
+    src: loki.service.j2
+    dest: /etc/systemd/system/loki.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Promtail service
+  ansible.builtin.template:
+    src: promtail.service.j2
+    dest: /etc/systemd/system/promtail.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Loki + Promtail
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - loki
+    - promtail

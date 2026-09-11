@@ -1,0 +1,21 @@
+---
+# This role assumes nginx is already the live webserver/proxy.
+# It only ADDS a localhost-only stub_status endpoint so nginx-prometheus-exporter
+# can scrape request rate, active connections, and (indirectly) 5xx/504 trends.
+- name: Ensure nginx is installed
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Deploy stub_status vhost (localhost only)
+  ansible.builtin.template:
+    src: stub_status.conf.j2
+    dest: /etc/nginx/conf.d/stub_status.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload nginx
+
+- name: Validate nginx config
+  ansible.builtin.command: nginx -t
+  changed_when: false

@@ -1,0 +1,8 @@
+---
+# Install/update only the observability stack.
+- name: Deploy monitoring stack
+  hosts: monitoring
+  become: true
+  roles:
+    - nginx        # ensures stub_status exists for the nginx exporter
+    - monitoring

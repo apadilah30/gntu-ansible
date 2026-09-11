@@ -1,0 +1,37 @@
+# Managed by Ansible - {{ item.name }}
+[Unit]
+Description=GNTU backend ({{ item.name }}) gunicorn/uvicorn
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User={{ deploy_user }}
+Group={{ deploy_group }}
+WorkingDirectory={{ backend_dir }}/{{ item.workdir }}
+EnvironmentFile={{ backend_dir }}/{{ item.workdir }}/.env
+ExecStart={{ backend_venv }}/bin/gunicorn {{ item.module }} \
+    -k uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:{{ item.port }} \
+    --workers {{ item.workers }} \
+    --timeout {{ gunicorn_worker_timeout }} \
+    --graceful-timeout {{ gunicorn_graceful_timeout }} \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --statsd-host=127.0.0.1:9125 \
+    --statsd-prefix={{ item.name }} \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info
+# Hard timeout above ensures a stuck upstream call cannot hang a worker forever
+# (root-cause mitigation for the intermittent 504). statsd feeds the exporter so
+# you can SEE worker busy/idle even when CPU looks idle.
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gntu-{{ item.name }}
+
+[Install]
+WantedBy=multi-user.target

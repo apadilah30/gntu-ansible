@@ -1,0 +1,187 @@
+---
+# ---------- node_exporter (host CPU/RAM/disk/net) ----------
+- name: Download node_exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+
+- name: Install node_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    dest: /opt/monitoring/bin/node_exporter
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: node_exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: node_exporter
+    exporter_exec: "/opt/monitoring/bin/node_exporter --web.listen-address=127.0.0.1:9100"
+  notify: reload systemd
+
+# ---------- nginx-prometheus-exporter ----------
+- name: Download nginx exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/nginxinc/nginx-prometheus-exporter/releases/download/v{{ nginx_exporter_version }}/nginx-prometheus-exporter_{{ nginx_exporter_version }}_linux_amd64.tar.gz"
+    dest: /opt/monitoring/bin
+    remote_src: true
+    creates: /opt/monitoring/bin/nginx-prometheus-exporter
+    mode: "0755"
+
+- name: nginx exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/nginx_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: nginx_exporter
+    exporter_exec: "/opt/monitoring/bin/nginx-prometheus-exporter --nginx.scrape-uri=http://127.0.0.1:8080/nginx_status --web.listen-address=127.0.0.1:9113"
+  notify: reload systemd
+
+# ---------- redis_exporter ----------
+- name: Download redis_exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/oliver006/redis_exporter/releases/download/v{{ redis_exporter_version }}/redis_exporter-v{{ redis_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/redis_exporter-v{{ redis_exporter_version }}.linux-amd64"
+
+- name: Install redis_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/redis_exporter-v{{ redis_exporter_version }}.linux-amd64/redis_exporter"
+    dest: /opt/monitoring/bin/redis_exporter
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: redis_exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/redis_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: redis_exporter
+    exporter_exec: "/opt/monitoring/bin/redis_exporter -redis.addr {{ redis_addr }} -redis.password '{{ redis_password }}' -web.listen-address 127.0.0.1:9121"
+  notify: reload systemd
+
+# ---------- postgres_exporter ----------
+- name: Download postgres_exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64"
+
+- name: Install postgres_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
+    dest: /opt/monitoring/bin/postgres_exporter
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: postgres_exporter env file
+  ansible.builtin.copy:
+    dest: /etc/prometheus/postgres_exporter.env
+    content: "DATA_SOURCE_NAME={{ pg_exporter_dsn }}\n"
+    owner: monitoring
+    group: monitoring
+    mode: "0600"
+
+- name: postgres_exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/postgres_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: postgres_exporter
+    exporter_exec: "/opt/monitoring/bin/postgres_exporter --web.listen-address=127.0.0.1:9187"
+    exporter_env_file: /etc/prometheus/postgres_exporter.env
+  notify: reload systemd
+
+# ---------- blackbox_exporter (uptime probing) ----------
+- name: Download blackbox_exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/blackbox_exporter/releases/download/v{{ blackbox_exporter_version }}/blackbox_exporter-{{ blackbox_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/blackbox_exporter-{{ blackbox_exporter_version }}.linux-amd64"
+
+- name: Install blackbox_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/blackbox_exporter-{{ blackbox_exporter_version }}.linux-amd64/blackbox_exporter"
+    dest: /opt/monitoring/bin/blackbox_exporter
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: blackbox_exporter config
+  ansible.builtin.copy:
+    src: blackbox.yml
+    dest: /etc/prometheus/blackbox.yml
+    owner: monitoring
+    group: monitoring
+    mode: "0644"
+
+- name: blackbox_exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/blackbox_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: blackbox_exporter
+    exporter_exec: "/opt/monitoring/bin/blackbox_exporter --config.file=/etc/prometheus/blackbox.yml --web.listen-address=127.0.0.1:9115"
+  notify: reload systemd
+
+# ---------- statsd_exporter (turns Gunicorn statsd -> Prometheus worker metrics) ----------
+- name: Download statsd_exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/statsd_exporter/releases/download/v0.27.1/statsd_exporter-0.27.1.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/statsd_exporter-0.27.1.linux-amd64"
+
+- name: Install statsd_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/statsd_exporter-0.27.1.linux-amd64/statsd_exporter"
+    dest: /opt/monitoring/bin/statsd_exporter
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+
+- name: statsd_exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/statsd_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: statsd_exporter
+    exporter_exec: "/opt/monitoring/bin/statsd_exporter --statsd.listen-udp=127.0.0.1:9125 --web.listen-address=127.0.0.1:9102"
+  notify: reload systemd
+
+- name: Flush handlers (systemd reload)
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start all exporters
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - node_exporter
+    - nginx_exporter
+    - redis_exporter
+    - postgres_exporter
+    - blackbox_exporter
+    - statsd_exporter

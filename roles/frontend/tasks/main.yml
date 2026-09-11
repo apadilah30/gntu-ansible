@@ -1,0 +1,109 @@
+---
+- name: Install PHP {{ php_version }} and extensions
+  ansible.builtin.apt:
+    name:
+      - "php{{ php_version }}-cli"
+      - "php{{ php_version }}-common"
+      - "php{{ php_version }}-pgsql"
+      - "php{{ php_version }}-redis"
+      - "php{{ php_version }}-mbstring"
+      - "php{{ php_version }}-xml"
+      - "php{{ php_version }}-curl"
+      - "php{{ php_version }}-gd"
+      - "php{{ php_version }}-zip"
+      - "php{{ php_version }}-bcmath"
+      - unzip
+    state: present
+    update_cache: true
+
+- name: Install Composer
+  ansible.builtin.get_url:
+    url: https://getcomposer.org/installer
+    dest: /tmp/composer-setup.php
+    mode: "0644"
+
+- name: Run Composer installer
+  ansible.builtin.command:
+    cmd: php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
+    creates: /usr/local/bin/composer
+
+- name: Install Node.js {{ node_version }}
+  ansible.builtin.shell: |
+    curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x | bash -
+    apt-get install -y nodejs
+  args:
+    creates: /usr/bin/node
+
+- name: Ensure frontend dir exists
+  ansible.builtin.file:
+    path: "{{ frontend_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0755"
+
+- name: Checkout frontend repo
+  ansible.builtin.git:
+    repo: "{{ frontend_repo }}"
+    dest: "{{ frontend_dir }}"
+    version: "{{ frontend_branch }}"
+    update: true
+  become_user: "{{ deploy_user }}"
+  register: frontend_git
+
+- name: composer install (no-dev, optimized)
+  ansible.builtin.command:
+    cmd: composer install --no-dev --optimize-autoloader --no-interaction
+    chdir: "{{ frontend_dir }}"
+  become_user: "{{ deploy_user }}"
+  when: frontend_git.changed
+
+- name: npm ci + build
+  ansible.builtin.shell: |
+    npm ci
+    npm run build
+  args:
+    chdir: "{{ frontend_dir }}"
+  become_user: "{{ deploy_user }}"
+  when: frontend_git.changed
+
+- name: Laravel caches (config/route/view)
+  ansible.builtin.command:
+    cmd: "php artisan {{ item }}"
+    chdir: "{{ frontend_dir }}"
+  become_user: "{{ deploy_user }}"
+  loop:
+    - migrate --force
+    - config:cache
+    - route:cache
+    - view:cache
+  when: frontend_git.changed
+
+- name: Deploy Octane systemd unit
+  ansible.builtin.template:
+    src: octane.service.j2
+    dest: /etc/systemd/system/gntu-cms-octane.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and restart Octane
+  ansible.builtin.systemd:
+    name: gntu-cms-octane.service
+    enabled: true
+    state: restarted
+
+# --- 504 root-cause reminder (informational; we don't rewrite your .env automatically) ---
+- name: Show critical 504 mitigation checklist for the FE .env
+  ansible.builtin.debug:
+    msg:
+      - "To stop the intermittent hang BEFORE requests reach the backend, set in {{ frontend_dir }}/.env:"
+      - "  SESSION_DRIVER=redis   (currently 'database' -> per-session DB locks stall Octane workers)"
+      - "  CACHE_STORE=redis"
+      - "  QUEUE_CONNECTION=redis"
+      - "And cap ALL Http:: calls to backend with ->timeout(8)->connectTimeout(3) (some have no timeout / 120s)."
+      - "After editing .env: php artisan config:cache && systemctl restart gntu-cms-octane"

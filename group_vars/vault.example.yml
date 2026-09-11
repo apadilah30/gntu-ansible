@@ -1,0 +1,8 @@
+---
+# Copy to group_vars/vault.yml and encrypt:  ansible-vault encrypt group_vars/vault.yml
+# These override the CHANGE_ME placeholders in all.yml.
+vault_grafana_admin_password: "super-secret"
+vault_pg_exporter_dsn: "postgresql://gntu_monitor:REALPASS@127.0.0.1:5432/postgres?sslmode=disable"
+vault_redis_password: ""
+vault_telegram_bot_token: "123456:ABC-your-bot-token"
+vault_telegram_chat_id: "-1001234567890"

@@ -1,0 +1,80 @@
+---
+- name: Ensure backend base dir exists
+  ansible.builtin.file:
+    path: "{{ backend_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0755"
+
+- name: Install system deps for Python builds
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - python3-venv
+      - python3-dev
+      - libpq-dev
+    state: present
+    update_cache: true
+
+- name: Checkout backend repo
+  ansible.builtin.git:
+    repo: "{{ backend_repo }}"
+    dest: "{{ backend_dir }}"
+    version: "{{ backend_branch }}"
+    update: true
+  become_user: "{{ deploy_user }}"
+  register: backend_git
+
+- name: Create virtualenv
+  ansible.builtin.command:
+    cmd: "python3 -m venv {{ backend_venv }}"
+    creates: "{{ backend_venv }}/bin/activate"
+  become_user: "{{ deploy_user }}"
+
+- name: Install/upgrade pip + gunicorn + uvicorn
+  ansible.builtin.pip:
+    name:
+      - pip
+      - gunicorn
+      - uvicorn
+    state: latest
+    virtualenv: "{{ backend_venv }}"
+  become_user: "{{ deploy_user }}"
+
+- name: Install backend requirements
+  ansible.builtin.pip:
+    requirements: "{{ backend_dir }}/requirements.txt"
+    virtualenv: "{{ backend_venv }}"
+  become_user: "{{ deploy_user }}"
+  when: backend_git.changed
+
+- name: Run migrations per service
+  ansible.builtin.command:
+    cmd: "{{ backend_venv }}/bin/python manage.py migrate --noinput"
+    chdir: "{{ backend_dir }}/{{ item.workdir }}"
+  become_user: "{{ deploy_user }}"
+  loop: "{{ backend_services }}"
+  when: backend_git.changed
+  register: migrate_result
+  changed_when: "'No migrations to apply' not in migrate_result.stdout"
+
+- name: Deploy systemd unit per backend service
+  ansible.builtin.template:
+    src: gunicorn.service.j2
+    dest: "/etc/systemd/system/gntu-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ backend_services }}"
+  notify: reload systemd
+
+- name: Flush handlers (reload systemd before enabling)
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and (re)start backend services
+  ansible.builtin.systemd:
+    name: "gntu-{{ item.name }}.service"
+    enabled: true
+    state: restarted
+  loop: "{{ backend_services }}"

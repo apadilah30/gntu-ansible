@@ -1,0 +1,18 @@
+# Managed by Ansible
+[Unit]
+Description=Alertmanager
+After=network.target
+
+[Service]
+Type=simple
+User=monitoring
+Group=monitoring
+ExecStart=/opt/monitoring/bin/alertmanager \
+    --config.file=/etc/alertmanager/alertmanager.yml \
+    --storage.path=/var/lib/alertmanager \
+    --web.listen-address=127.0.0.1:9093
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

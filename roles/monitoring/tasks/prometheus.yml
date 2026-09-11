@@ -1,0 +1,53 @@
+---
+- name: Download Prometheus
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64"
+
+- name: Install Prometheus binaries
+  ansible.builtin.copy:
+    src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/{{ item }}"
+    dest: "/opt/monitoring/bin/{{ item }}"
+    remote_src: true
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+  loop:
+    - prometheus
+    - promtool
+
+- name: Deploy prometheus.yml
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    owner: monitoring
+    group: monitoring
+    mode: "0644"
+  notify: restart prometheus
+
+- name: Deploy alert rules
+  ansible.builtin.template:
+    src: alert_rules.yml.j2
+    dest: /etc/prometheus/rules/alert_rules.yml
+    owner: monitoring
+    group: monitoring
+    mode: "0644"
+  notify: restart prometheus
+
+- name: Prometheus service
+  ansible.builtin.template:
+    src: prometheus.service.j2
+    dest: /etc/systemd/system/prometheus.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    enabled: true
+    state: started

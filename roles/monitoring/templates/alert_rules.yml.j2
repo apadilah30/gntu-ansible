@@ -1,0 +1,104 @@
+# Managed by Ansible - alert rules tuned for the intermittent 504/hang problem
+groups:
+  - name: availability
+    rules:
+      - alert: EndpointDown
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Endpoint DOWN: {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Blackbox probe failed for 1m. This is the FE/BE/api-gateway uptime check."
+
+      - alert: SlowEndpoint
+        expr: probe_http_duration_seconds{phase="processing"} > 5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow response: {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "HTTP processing time > 5s for 3m. Early warning before a 504 hang."
+
+  - name: nginx_504
+    rules:
+      # Direct signal of the reported symptom. Requires nginx exporter / log metrics.
+      - alert: Nginx504Spike
+        expr: increase(nginx_http_requests_total{status="504"}[5m]) > 5
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "504 Gateway Timeout spike"
+          description: "More than 5 responses with HTTP 504 in 5m. Check Octane/Gunicorn worker saturation and session locks."
+
+  - name: worker_saturation
+    rules:
+      # Gunicorn workers all busy while CPU is low == the classic hang (blocking upstream call w/o timeout).
+      - alert: GunicornWorkersSaturated
+        expr: avg_over_time(gunicorn_workers[5m]) > 0 and rate(gunicorn_requests_total[5m]) == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gunicorn workers busy but no throughput"
+          description: "Workers appear stuck (no requests completing) - likely an untimed upstream call blocking the event loop."
+
+  - name: resources
+    rules:
+      - alert: HostHighCPU
+        expr: 100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "CPU > 90% for 5m."
+
+      - alert: HostLowMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low memory on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Available memory < 10% for 5m."
+
+      - alert: HostDiskAlmostFull
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes) * 100 < 15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk almost full on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Free disk < 15% on {{ '{{' }} $labels.mountpoint {{ '}}' }}."
+
+  - name: dependencies
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is DOWN"
+          description: "redis_exporter reports Redis unreachable. Session/cache + Celery broker impacted."
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is DOWN"
+          description: "postgres_exporter reports the database unreachable."
+
+      # Session/cache-on-database lock waits: the FE-side cause of a hang before the request reaches the gateway.
+      - alert: PostgresLockWaits
+        expr: pg_locks_count{mode="ExclusiveLock"} > 20
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL exclusive locks"
+          description: "Possible Laravel DB-session lock contention. Consider moving SESSION_DRIVER/CACHE_STORE to Redis."

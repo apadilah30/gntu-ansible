@@ -1,0 +1,7 @@
+---
+# Deploy/redeploy only the Laravel CMS (Octane).
+- name: Deploy frontend
+  hosts: frontend
+  become: true
+  roles:
+    - frontend

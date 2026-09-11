@@ -1,0 +1,32 @@
+# Managed by Ansible - ship journald (all systemd units) + nginx logs to Loki
+server:
+  http_listen_address: 127.0.0.1
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/loki/positions.yaml
+
+clients:
+  - url: http://127.0.0.1:3100/loki/api/v1/push
+
+scrape_configs:
+  # All systemd services: gntu-cms-octane, gntu-api-gateway, gntu-*, celery, etc.
+  - job_name: journal
+    journal:
+      max_age: 12h
+      labels:
+        job: systemd-journal
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: unit
+      - source_labels: ['__journal_syslog_identifier']
+        target_label: identifier
+
+  # nginx access/error logs - lets you correlate a 504 spike with the exact request.
+  - job_name: nginx
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: nginx
+          __path__: /var/log/nginx/*.log

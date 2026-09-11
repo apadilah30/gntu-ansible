@@ -1,0 +1,68 @@
+---
+- name: Add Grafana APT key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /etc/apt/keyrings/grafana.asc
+    mode: "0644"
+
+- name: Add Grafana APT repo
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+    state: present
+    filename: grafana
+
+- name: Install Grafana
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+
+- name: Configure Grafana (port + admin)
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: restart grafana
+
+- name: Provision datasources
+  ansible.builtin.template:
+    src: grafana-datasources.yml.j2
+    dest: /etc/grafana/provisioning/datasources/gntu.yml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: restart grafana
+
+- name: Provision dashboard provider
+  ansible.builtin.copy:
+    src: grafana-dashboard-provider.yml
+    dest: /etc/grafana/provisioning/dashboards/gntu.yml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: restart grafana
+
+- name: Ensure dashboard dir
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+
+- name: Deploy GNTU overview dashboard
+  ansible.builtin.copy:
+    src: gntu-overview-dashboard.json
+    dest: /var/lib/grafana/dashboards/gntu-overview.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: restart grafana
+
+- name: Enable and start Grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    enabled: true
+    state: started

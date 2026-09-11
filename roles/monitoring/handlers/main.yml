@@ -1,0 +1,29 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    state: restarted
+
+- name: restart alertmanager
+  ansible.builtin.systemd:
+    name: alertmanager
+    state: restarted
+
+- name: restart loki
+  ansible.builtin.systemd:
+    name: loki
+    state: restarted
+
+- name: restart promtail
+  ansible.builtin.systemd:
+    name: promtail
+    state: restarted
+
+- name: restart grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted

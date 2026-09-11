@@ -1,0 +1,25 @@
+# Managed by Ansible - {{ item.name }} (Node/Socket.IO)
+[Unit]
+Description=GNTU websocket ({{ item.name }})
+After=network.target
+
+[Service]
+Type=simple
+User={{ deploy_user }}
+Group={{ deploy_group }}
+WorkingDirectory={{ websocket_dir }}
+ExecStart=/usr/bin/node {{ websocket_dir }}/{{ item.script }}
+Environment=PORT={{ item.port }}
+Environment=CRM_PORT_SOCKET_SERVER={{ item.port }}
+Environment=SOCKET_PATH={{ item.path }}
+Environment=SOCKET_API_KEY=5a8f3d2e-1b9c-4c7e-ae6f-9d8b2c6a7f5d
+Environment=ALLOWED_ORIGINS=*
+Environment=SOCKET_CORS_ORIGIN=*
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gntu-{{ item.name }}
+
+[Install]
+WantedBy=multi-user.target

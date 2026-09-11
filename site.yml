@@ -1,0 +1,33 @@
+---
+# Full provisioning: base + app deploy + monitoring, in one run.
+# Use tags to run subsets, e.g.:  ansible-playbook site.yml --tags monitoring
+- name: Base host setup
+  hosts: all
+  become: true
+  roles:
+    - { role: common, tags: ["common", "base"] }
+    - { role: nginx,  tags: ["nginx", "base"] }
+
+- name: Deploy backend
+  hosts: backend
+  become: true
+  roles:
+    - { role: backend, tags: ["backend", "deploy"] }
+
+- name: Deploy websocket
+  hosts: websocket
+  become: true
+  roles:
+    - { role: websocket, tags: ["websocket", "deploy"] }
+
+- name: Deploy frontend
+  hosts: frontend
+  become: true
+  roles:
+    - { role: frontend, tags: ["frontend", "deploy"] }
+
+- name: Monitoring stack
+  hosts: monitoring
+  become: true
+  roles:
+    - { role: monitoring, tags: ["monitoring", "observability"] }

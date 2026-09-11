@@ -1,0 +1,15 @@
+# Managed by Ansible
+[Unit]
+Description=Promtail log shipper
+After=network.target loki.service
+
+[Service]
+Type=simple
+User=monitoring
+Group=monitoring
+ExecStart=/opt/monitoring/bin/promtail -config.file=/etc/promtail/promtail-config.yml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

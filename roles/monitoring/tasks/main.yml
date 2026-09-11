@@ -1,0 +1,40 @@
+---
+- name: Create monitoring system user
+  ansible.builtin.user:
+    name: monitoring
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Ensure base monitoring dirs
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: monitoring
+    group: monitoring
+    mode: "0755"
+  loop:
+    - /etc/prometheus
+    - /etc/prometheus/rules
+    - /var/lib/prometheus
+    - /etc/alertmanager
+    - /var/lib/alertmanager
+    - /etc/loki
+    - /var/lib/loki
+    - /etc/promtail
+    - /opt/monitoring/bin
+
+- name: Install exporters and core stack
+  ansible.builtin.include_tasks: exporters.yml
+
+- name: Install Prometheus
+  ansible.builtin.include_tasks: prometheus.yml
+
+- name: Install Alertmanager
+  ansible.builtin.include_tasks: alertmanager.yml
+
+- name: Install Loki + Promtail
+  ansible.builtin.include_tasks: loki.yml
+
+- name: Install Grafana
+  ansible.builtin.include_tasks: grafana.yml

@@ -1,0 +1,19 @@
+# Managed by Ansible
+[Unit]
+Description=Prometheus
+After=network.target
+
+[Service]
+Type=simple
+User=monitoring
+Group=monitoring
+ExecStart=/opt/monitoring/bin/prometheus \
+    --config.file=/etc/prometheus/prometheus.yml \
+    --storage.tsdb.path=/var/lib/prometheus \
+    --storage.tsdb.retention.time={{ prometheus_retention }} \
+    --web.listen-address=127.0.0.1:9090
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

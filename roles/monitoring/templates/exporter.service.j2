@@ -1,0 +1,18 @@
+# Managed by Ansible - {{ exporter_name }}
+[Unit]
+Description=Prometheus {{ exporter_name }}
+After=network.target
+
+[Service]
+Type=simple
+User=monitoring
+Group=monitoring
+{% if exporter_env_file is defined %}
+EnvironmentFile={{ exporter_env_file }}
+{% endif %}
+ExecStart={{ exporter_exec }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

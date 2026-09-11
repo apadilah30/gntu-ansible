@@ -1,0 +1,15 @@
+# Managed by Ansible
+[Unit]
+Description=Loki log aggregation
+After=network.target
+
+[Service]
+Type=simple
+User=monitoring
+Group=monitoring
+ExecStart=/opt/monitoring/bin/loki -config.file=/etc/loki/loki-config.yml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

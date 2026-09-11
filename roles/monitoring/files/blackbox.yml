@@ -1,0 +1,24 @@
+# Managed by Ansible - blackbox_exporter probes
+modules:
+  http_2xx:
+    prober: http
+    timeout: 8s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 301, 302, 401, 403]
+      method: GET
+      preferred_ip_protocol: ip4
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+  # Detects the exact 504/hang symptom: flags as down if no response within 10s.
+  http_504_watch:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200, 301, 302]
+      fail_if_body_matches_regexp:
+        - "504 Gateway Time-out"
+  tcp_connect:
+    prober: tcp
+    timeout: 5s

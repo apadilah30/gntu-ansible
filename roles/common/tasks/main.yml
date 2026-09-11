@@ -1,0 +1,36 @@
+---
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - git
+      - unzip
+      - tar
+      - acl
+      - ca-certificates
+      - gnupg
+      - lsof
+      - htop
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure UFW is present (firewall)
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+# NOTE: We do NOT enable/deny by default to avoid locking you out.
+# Recommended rules (apply manually or uncomment after review):
+#   allow 22 (ssh), 80/443 (nginx). Keep exporter/monitoring ports bound to 127.0.0.1
+#   or restricted to your admin IP. Grafana (3001) should sit behind nginx + auth.
+- name: Show firewall recommendation
+  ansible.builtin.debug:
+    msg:
+      - "Firewall (UFW) installed but NOT auto-enabled to avoid lockout."
+      - "Recommended: ufw allow 22,80,443; keep 9090/9093/9100/3001/9080/3100 on localhost only."
