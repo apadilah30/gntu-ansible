@@ -9,6 +9,10 @@ Type=simple
 User={{ deploy_user }}
 Group={{ deploy_group }}
 WorkingDirectory={{ frontend_dir }}
+# www-data has no writable $HOME; give FrankenPHP/Caddy a writable config+data dir
+# to avoid "config autosave"/"clean storage" warnings.
+Environment=XDG_CONFIG_HOME={{ frankenphp_data_dir }}/config
+Environment=XDG_DATA_HOME={{ frankenphp_data_dir }}/data
 ExecStart=/usr/bin/php artisan octane:start \
     --server=frankenphp \
     --host={{ frankenphp_listen.split(':')[0] }} \
