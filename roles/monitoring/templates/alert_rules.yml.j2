@@ -32,6 +32,36 @@ groups:
           summary: "504 Gateway Timeout spike"
           description: "More than 5 responses with HTTP 504 in 5m. Check Octane/Gunicorn worker saturation and session locks."
 
+  - name: php_fpm
+    rules:
+      # FE 504 root-cause: all FPM children busy => requests queue => 504, CPU low.
+      - alert: PhpFpmChildrenExhausted
+        expr: phpfpm_active_processes >= phpfpm_total_processes and phpfpm_total_processes > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PHP-FPM children exhausted (FE)"
+          description: "All PHP-FPM children busy for 1m. Requests are queuing and will 504 without reaching the backend. Check slow Http:: calls / raise pm.max_children."
+
+      - alert: PhpFpmListenQueue
+        expr: phpfpm_listen_queue > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM requests queuing"
+          description: "phpfpm_listen_queue > 0 for 1m: no free child to accept new requests."
+
+      - alert: PhpFpmSlowRequests
+        expr: increase(phpfpm_slow_requests[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PHP-FPM slow requests detected"
+          description: "Requests exceeded request_slowlog_timeout. See {{ '{{' }} $labels.instance {{ '}}' }} slowlog for the exact endpoint."
+
   - name: worker_saturation
     rules:
       # Gunicorn workers all busy while CPU is low == the classic hang (blocking upstream call w/o timeout).

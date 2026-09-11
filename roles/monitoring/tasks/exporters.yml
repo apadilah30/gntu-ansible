@@ -170,10 +170,34 @@
     exporter_exec: "/opt/monitoring/bin/statsd_exporter --statsd.listen-udp=127.0.0.1:9125 --web.listen-address=127.0.0.1:9102"
   notify: reload systemd
 
+# ---------- php-fpm_exporter (only when FE uses the PHP-FPM runtime) ----------
+# THIS is the key FE metric for the 504: it shows child exhaustion + request queue
+# building up while CPU stays low. Not installed for the FrankenPHP runtime, which
+# exposes worker metrics via Octane instead (see README 5.4).
+- name: Download php-fpm_exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/hipages/php-fpm_exporter/releases/download/v{{ phpfpm_exporter_version }}/php-fpm_exporter_{{ phpfpm_exporter_version }}_linux_amd64"
+    dest: /opt/monitoring/bin/php-fpm_exporter
+    mode: "0755"
+    owner: monitoring
+    group: monitoring
+  when: frontend_runtime | default('fpm') == 'fpm'
+
+- name: php-fpm_exporter service
+  ansible.builtin.template:
+    src: "exporter.service.j2"
+    dest: /etc/systemd/system/phpfpm_exporter.service
+    mode: "0644"
+  vars:
+    exporter_name: phpfpm_exporter
+    exporter_exec: "/opt/monitoring/bin/php-fpm_exporter server --phpfpm.scrape-uri http://127.0.0.1:8080/fpm-status --web.listen-address 127.0.0.1:9253"
+  when: frontend_runtime | default('fpm') == 'fpm'
+  notify: reload systemd
+
 - name: Flush handlers (systemd reload)
   ansible.builtin.meta: flush_handlers
 
-- name: Enable and start all exporters
+- name: Enable and start core exporters
   ansible.builtin.systemd:
     name: "{{ item }}"
     enabled: true
@@ -185,3 +209,10 @@
     - postgres_exporter
     - blackbox_exporter
     - statsd_exporter
+
+- name: Enable and start php-fpm_exporter (FPM runtime only)
+  ansible.builtin.systemd:
+    name: phpfpm_exporter
+    enabled: true
+    state: started
+  when: frontend_runtime | default('fpm') == 'fpm'

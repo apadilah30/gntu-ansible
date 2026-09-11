@@ -1,7 +1,10 @@
 ---
-- name: Install PHP {{ php_version }} and extensions
+# FE runs as: nginx (serves /var/www/gntu-cms/public) -> PHP-FPM 8.3 (unix socket).
+# There is NO Octane service.
+- name: Install PHP {{ php_version }} (FPM) and extensions
   ansible.builtin.apt:
     name:
+      - "php{{ php_version }}-fpm"
       - "php{{ php_version }}-cli"
       - "php{{ php_version }}-common"
       - "php{{ php_version }}-pgsql"
@@ -58,7 +61,7 @@
   become_user: "{{ deploy_user }}"
   when: frontend_git.changed
 
-- name: npm ci + build
+- name: npm ci + build (assets end up in public/build)
   ansible.builtin.shell: |
     npm ci
     npm run build
@@ -67,7 +70,7 @@
   become_user: "{{ deploy_user }}"
   when: frontend_git.changed
 
-- name: Laravel caches (config/route/view)
+- name: Laravel migrate + optimize caches
   ansible.builtin.command:
     cmd: "php artisan {{ item }}"
     chdir: "{{ frontend_dir }}"
@@ -79,31 +82,35 @@
     - view:cache
   when: frontend_git.changed
 
-- name: Deploy Octane systemd unit
-  ansible.builtin.template:
-    src: octane.service.j2
-    dest: /etc/systemd/system/gntu-cms-octane.service
-    owner: root
-    group: root
-    mode: "0644"
-  notify: reload systemd
+- name: Ensure storage + cache are writable by php-fpm
+  ansible.builtin.file:
+    path: "{{ frontend_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0775"
+    recurse: true
+  loop:
+    - storage
+    - bootstrap/cache
 
-- name: Flush handlers
-  ansible.builtin.meta: flush_handlers
+# ---- Runtime-specific setup (fpm | frankenphp) ----
+- name: Configure PHP-FPM runtime
+  ansible.builtin.include_tasks: runtime_fpm.yml
+  when: frontend_runtime == "fpm"
 
-- name: Enable and restart Octane
-  ansible.builtin.systemd:
-    name: gntu-cms-octane.service
-    enabled: true
-    state: restarted
+- name: Configure FrankenPHP (Octane) runtime
+  ansible.builtin.include_tasks: runtime_frankenphp.yml
+  when: frontend_runtime == "frankenphp"
 
 # --- 504 root-cause reminder (informational; we don't rewrite your .env automatically) ---
-- name: Show critical 504 mitigation checklist for the FE .env
+- name: Show 504 mitigation checklist (PHP-FPM model)
+  when: frontend_runtime == "fpm"
   ansible.builtin.debug:
     msg:
-      - "To stop the intermittent hang BEFORE requests reach the backend, set in {{ frontend_dir }}/.env:"
-      - "  SESSION_DRIVER=redis   (currently 'database' -> per-session DB locks stall Octane workers)"
-      - "  CACHE_STORE=redis"
-      - "  QUEUE_CONNECTION=redis"
-      - "And cap ALL Http:: calls to backend with ->timeout(8)->connectTimeout(3) (some have no timeout / 120s)."
-      - "After editing .env: php artisan config:cache && systemctl restart gntu-cms-octane"
+      - "504 tanpa jejak di backend = child PHP-FPM habis menunggu panggilan Http:: yang lambat."
+      - "1) Turunkan SEMUA Http:: ke backend jadi ->timeout(8)->connectTimeout(3) (ada yang 120s/tanpa timeout)."
+      - "2) Pindah SESSION_DRIVER & CACHE_STORE ke redis (sekarang 'database' -> lock di PostgreSQL)."
+      - "3) Turunkan nginx 'fastcgi_read_timeout 300s' menjadi ~30-60s agar request macet cepat gagal, tidak menyandera worker."
+      - "4) Tune pm.max_children di pool (lihat metrik php-fpm 'active/max children' & 'listen queue' di Grafana)."
+      - "Setelah ubah .env: cd {{ frontend_dir }} && php artisan config:cache && systemctl reload php{{ php_version }}-fpm"

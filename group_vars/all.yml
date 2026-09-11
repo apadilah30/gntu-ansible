@@ -27,12 +27,27 @@ php_version: "8.3"
 python_bin: "/usr/bin/python3"        # BE historically pinned to 3.7; set to venv python
 node_version: "20"
 
-# ---- Frontend (Laravel Octane / FrankenPHP) ----
-frontend_octane_server: "frankenphp"
-frontend_port: 8084
-# Worker tuning: start ~= CPU cores. Too few = request queuing -> nginx 504.
-frontend_octane_workers: 8
-frontend_octane_max_requests: 500     # recycle workers to avoid leaks
+# ---- Frontend runtime selector ----
+# "fpm"        = nginx + PHP-FPM 8.3 (current setup; default, safest)
+# "frankenphp" = Laravel Octane on FrankenPHP worker mode (faster, persistent workers)
+# See README section 5.4. Switch only AFTER applying the Http:: timeout + Redis
+# session fixes, otherwise a persistent-worker runtime hangs faster, not slower.
+frontend_runtime: "fpm"
+
+# FrankenPHP worker-mode tuning (used only when frontend_runtime == "frankenphp")
+frankenphp_listen: "127.0.0.1:8084"     # put nginx in front as reverse proxy
+frankenphp_workers: 8                    # ~= CPU cores
+frankenphp_max_requests: 500             # recycle workers to avoid leaks
+
+# ---- Frontend (Laravel served by nginx + PHP-FPM, NOT Octane) ----
+# nginx serves {{ frontend_dir }}/public and passes .php to the FPM unix socket.
+# These control the FPM pool that is the main lever for the intermittent 504.
+fpm_max_children: 30              # cap by RAM: ~ (free_RAM_MB / avg_process_MB)
+fpm_start_servers: 6
+fpm_min_spare: 4
+fpm_max_spare: 10
+fpm_request_terminate_timeout: "60s"   # kill runaway requests (nginx side is 300s today)
+fpm_slowlog_timeout: "5s"              # log requests slower than 5s to find the culprit
 
 # ---- Backend (Gunicorn + UvicornWorker) ----
 # Per service: bind port, workers, and a HARD request timeout.
@@ -53,9 +68,8 @@ websocket_services:
 # ---- Public endpoints for blackbox uptime probing ----
 # These directly answer "is the app up and behaving normally?"
 blackbox_targets:
-  - "https://ghrahaniagatatautama.lmd.co.id/"                    # FE home
+  - "https://ghrahaniagatatautama.lmd.co.id/"                    # FE home (nginx + php-fpm)
   - "https://ghrahaniagatatautama.lmd.co.id/api-gateway/"        # BE via FE proxy
-  - "http://127.0.0.1:8084/up"                                   # Laravel /up healthcheck (local)
   - "http://127.0.0.1:8000/"                                     # gateway direct (local)
 
 # ---- Monitoring component versions ----
@@ -66,6 +80,7 @@ nginx_exporter_version: "1.3.0"
 redis_exporter_version: "1.62.0"
 postgres_exporter_version: "0.15.0"
 blackbox_exporter_version: "0.25.0"
+phpfpm_exporter_version: "2.2.0"
 loki_version: "3.1.1"
 promtail_version: "3.1.1"
 grafana_apt: true                      # install Grafana from official apt repo

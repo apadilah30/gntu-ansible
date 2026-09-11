@@ -1,0 +1,24 @@
+---
+# PHP-FPM runtime (default). The pool tuning is the main lever for the 504.
+- name: Deploy tuned PHP-FPM pool
+  ansible.builtin.template:
+    src: php-fpm-pool.conf.j2
+    dest: "/etc/php/{{ php_version }}/fpm/pool.d/gntu-cms.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart php-fpm
+
+- name: Ensure php-fpm slowlog dir exists
+  ansible.builtin.file:
+    path: "/var/log/php{{ php_version }}-fpm"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0755"
+
+- name: Enable PHP-FPM
+  ansible.builtin.systemd:
+    name: "php{{ php_version }}-fpm"
+    enabled: true
+    state: started

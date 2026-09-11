@@ -1,0 +1,30 @@
+# Managed by Ansible - GNTU CMS (Laravel Octane / FrankenPHP worker mode)
+[Unit]
+Description=GNTU CMS Laravel Octane (FrankenPHP)
+After=network.target redis-server.service postgresql.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User={{ deploy_user }}
+Group={{ deploy_group }}
+WorkingDirectory={{ frontend_dir }}
+ExecStart=/usr/bin/php artisan octane:start \
+    --server=frankenphp \
+    --host={{ frankenphp_listen.split(':')[0] }} \
+    --port={{ frankenphp_listen.split(':')[1] }} \
+    --workers={{ frankenphp_workers }} \
+    --max-requests={{ frankenphp_max_requests }}
+# Persistent workers: the app boots once and stays in memory (fast).
+# --max-requests recycles workers to avoid leaks. A slow Http:: call without a
+# timeout will exhaust these FEW workers quickly, so the README 5.2 fixes are
+# MANDATORY before switching to this runtime.
+ExecReload=/usr/bin/php artisan octane:reload
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gntu-cms-octane
+
+[Install]
+WantedBy=multi-user.target

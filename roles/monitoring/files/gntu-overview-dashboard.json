@@ -37,21 +37,33 @@
     },
     {
       "type": "row",
-      "title": "Worker saturation (root-cause: hang while CPU idle)",
+      "title": "Saturation (root-cause: hang while CPU idle)",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }
     },
     {
       "type": "timeseries",
-      "title": "Gunicorn busy workers per service",
+      "title": "PHP-FPM children: active vs total (FE)",
+      "description": "When active reaches total, new requests queue and 504 without reaching the backend.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "phpfpm_active_processes", "legendFormat": "active" },
+        { "expr": "phpfpm_total_processes", "legendFormat": "total" },
+        { "expr": "phpfpm_listen_queue", "legendFormat": "listen queue" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Gunicorn busy workers per service (BE)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 },
       "targets": [{ "expr": "gunicorn_workers", "legendFormat": "{{job}}" }]
     },
     {
       "type": "timeseries",
-      "title": "Gunicorn request rate",
+      "title": "Gunicorn request rate (BE)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 },
       "targets": [{ "expr": "rate(gunicorn_requests_total[5m])", "legendFormat": "{{job}}" }]
     },
     {

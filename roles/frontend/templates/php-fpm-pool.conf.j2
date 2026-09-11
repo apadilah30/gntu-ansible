@@ -1,0 +1,36 @@
+; Managed by Ansible - GNTU CMS PHP-FPM pool
+[gntu-cms]
+user = {{ deploy_user }}
+group = {{ deploy_group }}
+
+; Match the socket path already used by your nginx config:
+;   fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+listen = /run/php/php{{ php_version }}-fpm.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+; --- Process manager: THE lever for the intermittent 504 ---
+; If every child is stuck waiting on a slow Http:: call, new requests queue and
+; eventually 504 (with no backend trace). Size max_children to RAM, and WATCH
+; the php-fpm exporter metrics (active vs max children, listen queue) in Grafana.
+pm = dynamic
+pm.max_children = {{ fpm_max_children }}
+pm.start_servers = {{ fpm_start_servers }}
+pm.min_spare_servers = {{ fpm_min_spare }}
+pm.max_spare_servers = {{ fpm_max_spare }}
+pm.max_requests = 500
+
+; A request should never legitimately run this long. Killing it frees the child
+; instead of letting it hang for the full nginx fastcgi_read_timeout (300s).
+request_terminate_timeout = {{ fpm_request_terminate_timeout }}
+
+; Log any request slower than this (find the exact endpoint that hangs).
+slowlog = /var/log/php{{ php_version }}-fpm/gntu-cms-slow.log
+request_slowlog_timeout = {{ fpm_slowlog_timeout }}
+
+; Expose the FPM status page (scraped by php-fpm_exporter on 127.0.0.1).
+pm.status_path = /fpm-status
+ping.path = /fpm-ping
+
+catch_workers_output = yes

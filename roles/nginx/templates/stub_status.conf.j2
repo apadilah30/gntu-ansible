@@ -1,11 +1,22 @@
-# Managed by Ansible - nginx stub_status for Prometheus exporter
+# Managed by Ansible - localhost-only status endpoints for Prometheus exporters
 server {
     listen 127.0.0.1:8080;
     server_name localhost;
 
+    # nginx metrics (request rate, active connections)
     location /nginx_status {
         stub_status;
         allow 127.0.0.1;
         deny all;
+    }
+
+    # PHP-FPM status/ping, proxied to the FPM pool socket.
+    # php-fpm_exporter scrapes http://127.0.0.1:8080/fpm-status.
+    location ~ ^/(fpm-status|fpm-ping)$ {
+        allow 127.0.0.1;
+        deny all;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php{{ php_version }}-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
     }
 }

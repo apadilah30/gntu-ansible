@@ -1,0 +1,44 @@
+---
+# FrankenPHP (Laravel Octane worker mode) runtime - faster, persistent workers.
+# Prerequisite: apply the Http:: timeout + Redis session fixes first (README 5.4).
+- name: Ensure laravel/octane + frankenphp are available (composer)
+  ansible.builtin.command:
+    cmd: composer require laravel/octane --no-interaction
+    chdir: "{{ frontend_dir }}"
+  become_user: "{{ deploy_user }}"
+  register: octane_require
+  changed_when: "'Nothing to install' not in octane_require.stdout"
+
+- name: Install FrankenPHP binary via octane
+  ansible.builtin.command:
+    cmd: php artisan octane:install --server=frankenphp --no-interaction
+    chdir: "{{ frontend_dir }}"
+    creates: "{{ frontend_dir }}/frankenphp"
+  become_user: "{{ deploy_user }}"
+
+- name: Deploy Octane/FrankenPHP systemd unit
+  ansible.builtin.template:
+    src: frankenphp.service.j2
+    dest: /etc/systemd/system/gntu-cms-octane.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and restart FrankenPHP (zero-config reload uses octane:reload)
+  ansible.builtin.systemd:
+    name: gntu-cms-octane.service
+    enabled: true
+    state: restarted
+
+- name: Reminder - point nginx at the FrankenPHP upstream
+  ansible.builtin.debug:
+    msg:
+      - "FrankenPHP listening on {{ frankenphp_listen }}."
+      - "Update nginx: replace the 'location ~ \\.php$ { fastcgi_pass ... }' block with a reverse proxy:"
+      - "  location / { proxy_pass http://{{ frankenphp_listen }}; proxy_read_timeout 60s; ... }"
+      - "Keep 'root {{ frontend_dir }}/public' for static assets (/build, images)."
+      - "To deploy new code without downtime: php artisan octane:reload"
